@@ -1,7 +1,10 @@
 ﻿using DataBaseService;
 using DataBaseService.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using RenderLibraryBackend.DTO;
+using RenderLibraryBackend.Services.Auth;
+using StackExchange.Redis;
 
 namespace RenderLibraryBackend.Controllers
 {
@@ -10,10 +13,14 @@ namespace RenderLibraryBackend.Controllers
     public class UserController : Controller
     {
         private ApplicationContext database;
+        private readonly TokenService tokenService;
+        private IConnectionMultiplexer redis;
 
-        public UserController(ApplicationContext db)
+        public UserController(ApplicationContext db, TokenService tokenService, IConnectionMultiplexer multiplexer)
         {
             this.database = db;
+            this.tokenService = tokenService;
+            this.redis = multiplexer;
         }
 
         [HttpPost("/signup")]
@@ -34,6 +41,27 @@ namespace RenderLibraryBackend.Controllers
             await database.SaveChangesAsync();
 
             return Ok();
+        }
+
+        [HttpPost("/login")]
+        public async Task<IActionResult> LoginUser(string userName, string password) 
+        {
+            var user = await database.Users
+                .FirstOrDefaultAsync(u => u.Username == userName && u.Password == password);
+
+            if (user == null)
+            {
+                return Unauthorized();
+            }
+
+            var token = tokenService.GenerateToken(user.Id, user.Username, user.IsAdmin);
+            var db = redis.GetDatabase(7);
+
+
+            await db.StringSetAsync(user.Id.ToString(), token);
+            db.KeyExpire(user.Id.ToString(), TimeSpan.FromHours(1));
+
+            return Ok(token);
         }
     }
 }

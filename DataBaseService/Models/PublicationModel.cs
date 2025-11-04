@@ -4,9 +4,9 @@
     {
         public int Id { get; set; }
 
-        public string Url { get; set; }
+        public string Url { get; set; } = string.Empty;
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public short Rating { get; set; }
 
@@ -18,10 +18,9 @@
 
         public bool IsPremium { get; set; }
 
-        public int AuthorId { get; set; } // Foreign Key
-        public virtual UserModel Author { get; set; }
+        public int AuthorId { get; set; }
+        public virtual UserModel Author { get; set; } = null!;
 
-        // 2. Many-to-Many: This publication can be favorited by many users.
         public virtual ICollection<UserModel> FavoritedByUsers { get; set; } = new List<UserModel>();
     }
 }

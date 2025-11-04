@@ -6,23 +6,31 @@ using Newtonsoft.Json;
 using RenderLibraryBackend.DataObjects;
 using RenderLibraryBackend.DataObjects.Content;
 using RenderLibraryBackend.DTO;
+using StackExchange.Redis;
 
 namespace RenderLibraryBackend.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class ContentController : Controller
+    public class ContentController : BaseAuthController
     {
         private ApplicationContext database;
+        private IConnectionMultiplexer redis;
 
-        public ContentController(ApplicationContext db)
+        public ContentController(ApplicationContext db, IConnectionMultiplexer multiplexer) : base(multiplexer)
         {
             this.database = db;
+            this.redis = multiplexer;
         }
 
         [HttpPost]
         public async Task<IActionResult> Upload(PublicationDto requestData)
         {
+            if (!await IsTokenValid())
+            {
+                return Unauthorized("Invalid token");
+            }
+
             var host = HttpContext.Request.Host.ToUriComponent();
 
             if (requestData.File == null || requestData.File.Length == 0)
@@ -69,8 +77,13 @@ namespace RenderLibraryBackend.Controllers
         }
 
         [HttpGet("GetAll")]
-        public async Task<IActionResult> GetAllimages(bool showHidden = false, int page = 0, int pageSize = 0, string query = null)
+        public async Task<IActionResult> GetAllimages(bool showHidden = false, int page = 0, int pageSize = 0, string? query = null)
         {
+            if (!await IsTokenValid())
+            {
+                return Unauthorized("Invalid token");
+            }
+
             var imageQuery = this.database.Publications.AsQueryable();
 
             if (!string.IsNullOrEmpty(query))

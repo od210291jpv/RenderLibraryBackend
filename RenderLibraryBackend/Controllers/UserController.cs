@@ -46,7 +46,7 @@ namespace RenderLibraryBackend.Controllers
         [HttpPost("/login")]
         public async Task<IActionResult> LoginUser(string userName, string password) 
         {
-            var user = await database.Users
+            UserModel? user = await database.Users
                 .FirstOrDefaultAsync(u => u.Username == userName && u.Password == password);
 
             if (user == null)
@@ -54,8 +54,8 @@ namespace RenderLibraryBackend.Controllers
                 return Unauthorized();
             }
 
-            var token = tokenService.GenerateToken(user.Id, user.Username, user.IsAdmin);
-            var db = redis.GetDatabase(7);
+            string token = tokenService.GenerateToken(user.Id, user.Username, user.IsAdmin);
+            IDatabase db = redis.GetDatabase(7);
 
 
             await db.StringSetAsync(user.Id.ToString(), token);

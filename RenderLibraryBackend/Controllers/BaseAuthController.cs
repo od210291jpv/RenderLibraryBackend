@@ -40,5 +40,26 @@ namespace RenderLibraryBackend.Controllers
             var db = redis.GetDatabase(7);
             return await db.StringGetAsync(userId) == token;
         }
+
+        protected async Task<int> GetUserByToken(string? token = null) 
+        {
+            string finalToken = token ?? this.GetToken() ?? string.Empty;
+            string? userId = finalToken.Split(':').Last();
+
+            if (userId is null)
+            {
+                return -1;
+            }
+
+            var db = redis.GetDatabase(7);
+            string? storedToken = await db.StringGetAsync(userId);
+
+            if (storedToken == token)
+            {
+                return int.Parse(userId);
+            }
+
+            return -1;
+        }
     }
 }

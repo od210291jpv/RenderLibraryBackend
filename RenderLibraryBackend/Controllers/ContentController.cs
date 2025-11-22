@@ -23,7 +23,8 @@ namespace RenderLibraryBackend.Controllers
             this.redis = multiplexer;
         }
 
-        [HttpPost]
+        [HttpPost("UploadImage")]
+        [ProducesResponseType(typeof(PublicationResponseDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> Upload(PublicationDto requestData)
         {
             if (!await IsTokenValid())
@@ -74,35 +75,53 @@ namespace RenderLibraryBackend.Controllers
                 user.Funds += requestData.Cost * 0.5m; // Add 50% of the cost to the author's funds
             }
 
+            PublicationResponseDto result = new PublicationResponseDto
+            {
+                Id = model.Id,
+                Url = model.Url,
+                Name = model.Name,
+                Cost = model.Cost,
+                AuthorId = model.AuthorId,
+                Hidden = model.Hidden,
+                IsPremium = model.IsPremium,
+            };
+
             if (await this.database.SaveChangesAsync() > 0)
             {
-                return Ok(serialized);
+                return Ok(result);
             }
 
-            return Accepted(serialized);
+            return Accepted(result);
         }
 
         [HttpGet("GetAll")]
-        public async Task<IActionResult> GetAllimages(bool showHidden = false, int page = 0, int pageSize = 0, string? query = null)
+        [ProducesResponseType(typeof(PaginatedResult<ContentResponseItem>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAllimages(bool showHidden = false, int page = 0, int pageSize = 10, string? query = null)
         {
             if (!await IsTokenValid())
             {
                 return Unauthorized("Invalid token");
             }
 
-            var imageQuery = this.database.Publications.AsQueryable();
+            if (pageSize <= 0) pageSize = 10;
+            if (page < 0) page = 0;
+
+            var imageQuery = this.database.Publications.AsNoTracking();
 
             if (!string.IsNullOrEmpty(query))
             {
                 imageQuery = imageQuery.Where(i => i.Name.Contains(query));
             }
 
-            var totalCount = await imageQuery.CountAsync();
-            var items = await imageQuery.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            imageQuery = imageQuery.Where(i => i.Hidden == showHidden);
 
-            var result = new PaginatedResult<ContentResponseItem>
-            {
-                Items = items.Where(i => i.Hidden == showHidden).Select(i => new ContentResponseItem
+            var totalCount = await imageQuery.CountAsync();
+
+            var items = await imageQuery
+                .OrderByDescending(i => i.Id)
+                .Skip(pageSize * page)
+                .Take(pageSize)
+                .Select(i => new ContentResponseItem
                 {
                     Id = i.Id,
                     Url = i.Url,
@@ -113,15 +132,27 @@ namespace RenderLibraryBackend.Controllers
                     Hidden = i.Hidden,
                     IsPremium = i.IsPremium,
                     AuthorId = i.AuthorId,
-                    Author = i.Author,
-                    FavoritedByUsers = i.FavoritedByUsers
-                }).ToList(),
+                    Author = new AuthorModel 
+                    {
+                        Id = i.Author.Id,
+                        Email = i.Author.Email,
+                        IsAdmin = i.Author.IsAdmin,
+                        Username = i.Author.Username
+                    },
+                })
+                .ToListAsync();
+
+            PaginatedResult<ContentResponseItem> result = new PaginatedResult<ContentResponseItem>
+            {
+                Items = items,
                 TotalCount = totalCount
             };
+
             return Ok(result);
         }
 
         [HttpPost("AddFavoriteImage")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
         public async Task<IActionResult> AddFavoriteImage(int imageId)
         {
             if (!await IsTokenValid())
@@ -166,6 +197,7 @@ namespace RenderLibraryBackend.Controllers
             return Ok();
         }
 
+        [HttpPost("Unfavorite")]
         public async Task<IActionResult> RemoveFavoriteImage(int imageId)
         {
             if (!await IsTokenValid())
@@ -200,6 +232,7 @@ namespace RenderLibraryBackend.Controllers
         }
 
         [HttpGet("GetFavoriteImages")]
+        [ProducesResponseType(typeof(List<ContentResponseItem>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetFavoriteImages()
         {
             if (!await IsTokenValid())
@@ -230,14 +263,19 @@ namespace RenderLibraryBackend.Controllers
                 Hidden = i.Hidden,
                 IsPremium = i.IsPremium,
                 AuthorId = i.AuthorId,
-                Author = i.Author,
-                FavoritedByUsers = i.FavoritedByUsers
+                Author = new AuthorModel 
+                {
+                    Id = i.Author.Id,
+                    Email = i.Author.Email,
+                    IsAdmin = i.Author.IsAdmin,
+                    Username = i.Author.Username
+                },
             }).ToList();
 
             return Ok(favoriteImages);
         }
 
-        [HttpPost("LikeInage")]
+        [HttpPost("LikeImage")]
         public async Task<IActionResult> LikeImage(int imageId)
         {
             if (!await IsTokenValid())
@@ -254,6 +292,7 @@ namespace RenderLibraryBackend.Controllers
             return Ok();
         }
 
+        [HttpPost("UnlikeImage")]
         public async Task<IActionResult> UnlikeImage(int imageId)
         {
             if (!await IsTokenValid())
@@ -314,6 +353,7 @@ namespace RenderLibraryBackend.Controllers
         }
 
         [HttpGet("GetImageRating")]
+        [ProducesResponseType(typeof(short), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetImageRating(int imageId)
         {
             if (!await IsTokenValid())
@@ -329,6 +369,7 @@ namespace RenderLibraryBackend.Controllers
         }
 
         [HttpGet("GetImageById")]
+        [ProducesResponseType(typeof(ContentResponseItem), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetImageById(int imageId)
         {
             if (!await IsTokenValid())
@@ -336,13 +377,13 @@ namespace RenderLibraryBackend.Controllers
                 return Unauthorized("Invalid token");
             }
 
-            var image = this.database.Publications.SingleOrDefault(i => i.Id == imageId);
+            var image = this.database.Publications.Include(p => p.Author).SingleOrDefault(i => i.Id == imageId);
             if (image == null)
             {
                 return NotFound("Image not found");
             }
 
-            var responseItem = new ContentResponseItem
+            return Ok(new ContentResponseItem
             {
                 Id = image.Id,
                 Url = image.Url,
@@ -353,11 +394,14 @@ namespace RenderLibraryBackend.Controllers
                 Hidden = image.Hidden,
                 IsPremium = image.IsPremium,
                 AuthorId = image.AuthorId,
-                Author = image.Author,
-                FavoritedByUsers = image.FavoritedByUsers
-            };
-
-            return Ok(responseItem);
+                Author = new AuthorModel
+                {
+                    Id = image.Author.Id,
+                    Email = image.Author.Email,
+                    IsAdmin = image.Author.IsAdmin,
+                    Username = image.Author.Username
+                },
+            });
         }
     }
 }

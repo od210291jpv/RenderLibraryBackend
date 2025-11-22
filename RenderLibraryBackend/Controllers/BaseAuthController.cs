@@ -41,10 +41,10 @@ namespace RenderLibraryBackend.Controllers
             return await db.StringGetAsync(userId) == token;
         }
 
-        protected async Task<int> GetUserByToken(string? token = null) 
+        protected async Task<int> GetUserByToken() 
         {
-            string finalToken = token ?? this.GetToken() ?? string.Empty;
-            string? userId = finalToken.Split(':').Last();
+            string token = this.GetToken() ?? string.Empty;
+            string? userId = token.Split(':').Last();
 
             if (userId is null)
             {

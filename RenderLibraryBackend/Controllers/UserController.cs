@@ -43,7 +43,8 @@ namespace RenderLibraryBackend.Controllers
             return Ok();
         }
 
-        [HttpPost("/login")]
+        [HttpGet("/login")]
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
         public async Task<IActionResult> LoginUser(string userName, string password) 
         {
             UserModel? user = await database.Users
@@ -58,7 +59,7 @@ namespace RenderLibraryBackend.Controllers
             IDatabase db = redis.GetDatabase(7);
 
 
-            await db.StringSetAsync(user.Id.ToString(), token);
+            await db.StringSetAsync(user.Id.ToString(), $"Bearer {token}");
             db.KeyExpire(user.Id.ToString(), TimeSpan.FromHours(1));
 
             return Ok(token);

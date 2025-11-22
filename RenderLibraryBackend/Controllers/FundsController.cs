@@ -18,6 +18,7 @@ namespace RenderLibraryBackend.Controllers
             this.redis = redis;
         }
 
+        [HttpPost("AddFunds")]
         public async Task<IActionResult> AddFunds(decimal amount)
         {
             if (!await IsTokenValid())
@@ -32,6 +33,12 @@ namespace RenderLibraryBackend.Controllers
             {
                 return NotFound("User not found");
             }
+
+            if (!user.IsAdmin) 
+            {
+                return Forbid("Only admins can add funds");
+            }
+
             user.Funds += amount;
              await this.database.SaveChangesAsync();
 

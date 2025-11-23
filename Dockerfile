@@ -3,7 +3,7 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 USER app
 WORKDIR /app
-EXPOSE 8080
+EXPOSE 8084
 EXPOSE 8081
 
 # Stage 2: Build Image

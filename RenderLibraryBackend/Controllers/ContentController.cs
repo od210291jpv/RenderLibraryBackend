@@ -117,7 +117,40 @@ namespace RenderLibraryBackend.Controllers
 
             var totalCount = await imageQuery.CountAsync();
 
-            var items = await imageQuery
+            var userId = await this.GetUserByToken();
+            var user = this.database.Users.SingleOrDefault(u => u.Id == userId);
+
+            List<ContentResponseItem> items = new();
+
+            if (!user!.IsAdmin)
+            {
+                items = await imageQuery.Where(i => i.Hidden == false).OrderByDescending(i => i.Id)
+                .Skip(pageSize * page)
+                .Take(pageSize)
+                .Select(i => new ContentResponseItem
+                {
+                    Id = i.Id,
+                    Url = i.Url,
+                    Name = i.Name,
+                    Rating = i.Rating,
+                    Cost = i.Cost,
+                    Likes = i.Likes,
+                    Hidden = i.Hidden,
+                    IsPremium = i.IsPremium,
+                    AuthorId = i.AuthorId,
+                    Author = new AuthorModel
+                    {
+                        Id = i.Author.Id,
+                        Email = i.Author.Email,
+                        IsAdmin = i.Author.IsAdmin,
+                        Username = i.Author.Username
+                    },
+                })
+                .ToListAsync();
+            }
+            else 
+            {
+                items = await imageQuery
                 .OrderByDescending(i => i.Id)
                 .Skip(pageSize * page)
                 .Take(pageSize)
@@ -132,7 +165,7 @@ namespace RenderLibraryBackend.Controllers
                     Hidden = i.Hidden,
                     IsPremium = i.IsPremium,
                     AuthorId = i.AuthorId,
-                    Author = new AuthorModel 
+                    Author = new AuthorModel
                     {
                         Id = i.Author.Id,
                         Email = i.Author.Email,
@@ -141,6 +174,7 @@ namespace RenderLibraryBackend.Controllers
                     },
                 })
                 .ToListAsync();
+            }
 
             PaginatedResult<ContentResponseItem> result = new PaginatedResult<ContentResponseItem>
             {
